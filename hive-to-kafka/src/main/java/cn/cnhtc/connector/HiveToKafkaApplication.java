@@ -1,7 +1,6 @@
 package cn.cnhtc.connector;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import com.alibaba.fastjson.JSONObject;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author ThinkPad
@@ -30,16 +30,25 @@ public class HiveToKafkaApplication implements CommandLineRunner {
 	public void run(String... args) throws Exception {
 		String tableName = "obd_data_201209";
 		jdbcTemplate.query("select * from " + tableName, resultSet -> {
-//			// todo
-//
-//			// 从resultSet 中获取 key(对应sbbh)
-//			String key = "";
-//			// 将resultSet 转换成 Json 字符串
-//
-//			// todo
-//			String value = "";
-//			// 以设备号为key, 转换后的String 为 value 发送给 kafka
-//			kafkaTemplate.send(key, value);
+			int keyIndex = 0;
+			int columnCount = resultSet.getMetaData().getColumnCount();
+			for (int i = 1; i <= columnCount; i++) {
+				if (resultSet.getMetaData().getColumnName(i).contains("sbh")) {
+					keyIndex = i;
+					break;
+				}
+			}
+			if (keyIndex > 0) {
+				// 从resultSet 中获取 key(对应sbh)
+				String key = resultSet.getString(resultSet.getMetaData().getColumnName(keyIndex));
+
+				Map<String, Object> map = new HashMap<>();
+				for (int i = 1; i <= columnCount; i++) {
+					map.put(resultSet.getMetaData().getColumnName(i), resultSet.getObject(resultSet.getMetaData().getColumnName(i)));
+				}
+				String jsonString = JSONObject.toJSONString(map);
+				kafkaTemplate.send("clw_vehicleV6", key, jsonString);
+			}
 		});
 	}
 }
